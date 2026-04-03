@@ -1304,7 +1304,9 @@ export default function App() {
     return combined;
   }, [allShoppingItems]);
 
-  const total=allShoppingItems.length, checked=checkedItems.size, pct=total>0?Math.round((checked/total)*100):0;
+  const total=allShoppingItems.length;
+  const checked=allShoppingItems.filter(item=>checkedItems.has(item.key)).length;
+  const pct=total>0?Math.round((checked/total)*100):0;
   const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.length>0);
   const barColor=pct===100?"#22c55e":pct>=66?"#84cc16":"#ffe066";
 
