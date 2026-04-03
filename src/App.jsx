@@ -1244,10 +1244,21 @@ export default function App() {
         setCheckedItems(new Set(data.checkedItems || []));
         setManualItems(data.manualItems || []);
         setRemovedKeys(new Set(data.removedKeys || []));
-        if (data.resetAt) {
+        // Restore countdown if timer was running before refresh
+        if (data.resetAt && !timerRef.current) {
           const rem = data.resetAt - Date.now();
-          if (rem > 0) {
-            // auto-reset timer already running
+          if (rem <= 0) {
+            // Expired while app was closed — clear everything
+            setDoc(doc(db, "app", "shopping"), { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null }, { merge: true });
+            setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
+          } else {
+            resetAtRef.current = data.resetAt;
+            timerRef.current = setInterval(() => {
+              const r = data.resetAt - Date.now();
+              if (r <= 0) { resetShopping(); return; }
+              const m = Math.floor(r/60000), s = Math.floor((r%60000)/1000);
+              setCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
+            }, 1000);
           }
         }
       }
@@ -1298,10 +1309,14 @@ export default function App() {
   const barColor=pct===100?"#22c55e":pct>=66?"#84cc16":"#ffe066";
 
   // --- Auto-reset timer ---
+  const resetAtRef = useRef(null);
   useEffect(() => {
     if (total>0&&checked===total) {
       if (timerRef.current) return;
-      const end=Date.now()+60*60*1000;
+      // Save resetAt to Firebase so it persists across refreshes
+      const end = resetAtRef.current || Date.now()+60*60*1000;
+      resetAtRef.current = end;
+      saveShoppingState({ resetAt: end });
       timerRef.current=setInterval(()=>{
         const rem=end-Date.now();
         if (rem<=0){resetShopping();return;}
@@ -1310,16 +1325,18 @@ export default function App() {
       },1000);
     } else {
       if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
+      resetAtRef.current = null;
       setCountdown(null);
     }
   }, [checked, total]);
 
   // --- Handlers ---
   const resetShopping = () => {
-    const empty = { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[] };
+    const empty = { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null };
     setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
     setEditingKey(null);
     if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
+    resetAtRef.current = null;
     setCountdown(null);
     saveShoppingState(empty);
   };
