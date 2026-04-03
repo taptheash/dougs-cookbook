@@ -1285,10 +1285,16 @@ export default function App() {
   const [targetItems, setTargetItems] = useState([]);
   const [targetChecked, setTargetChecked] = useState(new Set());
   const [targetInput, setTargetInput] = useState("");
+  const [targetCountdown, setTargetCountdown] = useState(null);
+  const targetTimerRef = useRef(null);
+  const targetResetAtRef = useRef(null);
   // Lowes list state
   const [lowesItems, setLowesItems] = useState([]);
   const [lowesChecked, setLowesChecked] = useState(new Set());
   const [lowesInput, setLowesInput] = useState("");
+  const [lowesCountdown, setLowesCountdown] = useState(null);
+  const lowesTimerRef = useRef(null);
+  const lowesResetAtRef = useRef(null);
 
   // --- Load recipes from Firestore, seed if empty ---
   useEffect(() => {
@@ -1357,6 +1363,19 @@ export default function App() {
         const data = snap.data();
         setTargetItems(data.items || []);
         setTargetChecked(new Set(data.checked || []));
+        if (data.resetAt && !targetTimerRef.current) {
+          const rem = data.resetAt - Date.now();
+          if (rem <= 0) { resetTarget(); }
+          else {
+            targetResetAtRef.current = data.resetAt;
+            targetTimerRef.current = setInterval(() => {
+              const r = data.resetAt - Date.now();
+              if (r <= 0) { resetTarget(); return; }
+              const m = Math.floor(r/60000), s = Math.floor((r%60000)/1000);
+              setTargetCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
+            }, 1000);
+          }
+        }
       }
     });
     return () => unsub();
@@ -1369,10 +1388,67 @@ export default function App() {
         const data = snap.data();
         setLowesItems(data.items || []);
         setLowesChecked(new Set(data.checked || []));
+        if (data.resetAt && !lowesTimerRef.current) {
+          const rem = data.resetAt - Date.now();
+          if (rem <= 0) { resetLowes(); }
+          else {
+            lowesResetAtRef.current = data.resetAt;
+            lowesTimerRef.current = setInterval(() => {
+              const r = data.resetAt - Date.now();
+              if (r <= 0) { resetLowes(); return; }
+              const m = Math.floor(r/60000), s = Math.floor((r%60000)/1000);
+              setLowesCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
+            }, 1000);
+          }
+        }
       }
     });
     return () => unsub();
   }, []);
+
+  // --- Auto-reset timer for Target ---
+  useEffect(() => {
+    const targetTotal = targetItems.length;
+    const targetCheckedCount = targetItems.filter(i => targetChecked.has(i.key)).length;
+    if (targetTotal > 0 && targetCheckedCount === targetTotal) {
+      if (targetTimerRef.current) return;
+      const end = targetResetAtRef.current || Date.now() + 60*60*1000;
+      targetResetAtRef.current = end;
+      setDoc(doc(db, "app", "target"), { resetAt: end }, { merge: true });
+      targetTimerRef.current = setInterval(() => {
+        const rem = end - Date.now();
+        if (rem <= 0) { resetTarget(); return; }
+        const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
+        setTargetCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
+      }, 1000);
+    } else {
+      if (targetTimerRef.current) { clearInterval(targetTimerRef.current); targetTimerRef.current = null; }
+      targetResetAtRef.current = null;
+      setTargetCountdown(null);
+    }
+  }, [targetChecked, targetItems]);
+
+  // --- Auto-reset timer for Lowes ---
+  useEffect(() => {
+    const lowesTotal = lowesItems.length;
+    const lowesCheckedCount = lowesItems.filter(i => lowesChecked.has(i.key)).length;
+    if (lowesTotal > 0 && lowesCheckedCount === lowesTotal) {
+      if (lowesTimerRef.current) return;
+      const end = lowesResetAtRef.current || Date.now() + 60*60*1000;
+      lowesResetAtRef.current = end;
+      setDoc(doc(db, "app", "lowes"), { resetAt: end }, { merge: true });
+      lowesTimerRef.current = setInterval(() => {
+        const rem = end - Date.now();
+        if (rem <= 0) { resetLowes(); return; }
+        const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
+        setLowesCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
+      }, 1000);
+    } else {
+      if (lowesTimerRef.current) { clearInterval(lowesTimerRef.current); lowesTimerRef.current = null; }
+      lowesResetAtRef.current = null;
+      setLowesCountdown(null);
+    }
+  }, [lowesChecked, lowesItems]);
 
   const addTargetItem = () => {
     if (!targetInput.trim()) return;
@@ -1401,7 +1477,10 @@ export default function App() {
 
   const resetTarget = () => {
     setTargetItems([]); setTargetChecked(new Set());
-    setDoc(doc(db, "app", "target"), { items: [], checked: [] });
+    setTargetCountdown(null);
+    if (targetTimerRef.current) { clearInterval(targetTimerRef.current); targetTimerRef.current = null; }
+    targetResetAtRef.current = null;
+    setDoc(doc(db, "app", "target"), { items: [], checked: [], resetAt: null });
   };
 
   const addLowesItem = () => {
@@ -1431,7 +1510,10 @@ export default function App() {
 
   const resetLowes = () => {
     setLowesItems([]); setLowesChecked(new Set());
-    setDoc(doc(db, "app", "lowes"), { items: [], checked: [] });
+    setLowesCountdown(null);
+    if (lowesTimerRef.current) { clearInterval(lowesTimerRef.current); lowesTimerRef.current = null; }
+    lowesResetAtRef.current = null;
+    setDoc(doc(db, "app", "lowes"), { items: [], checked: [], resetAt: null });
   };
 
   // --- Computed shopping items ---
@@ -1697,7 +1779,9 @@ export default function App() {
             <span style={{color:"#aaa",fontSize:12}}>{currentTotal-currentChecked>0?`· ${currentTotal-currentChecked} remaining`:"· all done!"}</span>
           </span>
           {storeTab==="mb"&&countdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{countdown}</span>}
-          <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${storeColor}`,color:storeColor,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Recipes</button>
+          {storeTab==="target"&&targetCountdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{targetCountdown}</span>}
+          {storeTab==="lowes"&&lowesCountdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{lowesCountdown}</span>}
+          <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${storeColor}`,color:storeColor,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Back</button>
         </div>
 
         {/* Market Basket list */}
