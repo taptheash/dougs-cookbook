@@ -1685,19 +1685,6 @@ export default function App() {
             style={{background:storeDark,color:"white",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font}}>Reset</button>
         </div>
 
-        {/* Store tabs */}
-        <div style={{display:"flex",background:storeDark}}>
-          {[{key:"mb",label:"🧺 Market Basket"},{key:"target",label:"🎯 Target"},{key:"lowes",label:"🔨 Lowe's"}].map(s=>(
-            <button key={s.key} onClick={()=>setStoreTab(s.key)}
-              style={{flex:1,padding:"10px 4px",border:"none",cursor:"pointer",fontFamily:font,fontSize:11,fontWeight:storeTab===s.key?700:400,
-                background:storeTab===s.key?"white":storeDark,
-                color:storeTab===s.key?storeColor:"rgba(255,255,255,0.75)",
-                borderRadius:storeTab===s.key?"6px 6px 0 0":"0",transition:"all 0.2s"}}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-
         {/* Progress bar */}
         <div style={{background:storeDark,height:14,position:"relative"}}>
           <div style={{background:currentBarColor,height:14,width:currentPct+"%",transition:"width 0.4s ease"}}/>
@@ -1930,10 +1917,18 @@ export default function App() {
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
         <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>My Hub</p>
         <p style={{fontSize:12,color:kraft,margin:"2px 0 10px",fontStyle:"italic"}}>My Personal Recipe Collection</p>
-        <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center"}}>
+        <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{position:"relative"}}>
-            <button onClick={()=>setView("shopping")} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:cream,fontSize:12,cursor:"pointer",fontFamily:font}}>🛒 Market Basket</button>
+            <button onClick={()=>{setStoreTab("mb");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:cream,fontSize:12,cursor:"pointer",fontFamily:font}}>🧺 Market Basket</button>
             {total>0&&<span style={{position:"absolute",top:-6,right:-6,background:MB_RED,color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{total>99?"99+":total}</span>}
+          </div>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>{setStoreTab("target");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:"1.5px solid #cc0000",background:"transparent",color:"#ff9999",fontSize:12,cursor:"pointer",fontFamily:font}}>🎯 Target</button>
+            {targetItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#cc0000",color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{targetItems.length>99?"99+":targetItems.length}</span>}
+          </div>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>{setStoreTab("lowes");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:"1.5px solid #004990",background:"transparent",color:"#99bbdd",fontSize:12,cursor:"pointer",fontFamily:font}}>🔨 Lowe's</button>
+            {lowesItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#004990",color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{lowesItems.length>99?"99+":lowesItems.length}</span>}
           </div>
           <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import Recipe</button>
         </div>
