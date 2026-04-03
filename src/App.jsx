@@ -103,6 +103,73 @@ const STORE_SECTIONS = [
   { key: "dairy", label: "🥛 Aisle 1 — Dairy (Last!)", aisle: "1" },
 ];
 
+const TARGET_CATEGORIES = [
+  { key: "grocery", label: "🛒 Grocery & Snacks" },
+  { key: "health", label: "🧴 Health & Beauty" },
+  { key: "cleaning", label: "🧹 Cleaning & Household" },
+  { key: "clothing", label: "👕 Clothing" },
+  { key: "home", label: "🏠 Home & Decor" },
+  { key: "electronics", label: "🖥️ Electronics" },
+  { key: "toys", label: "🧸 Toys & Entertainment" },
+  { key: "pharmacy", label: "💊 Pharmacy" },
+  { key: "pet", label: "🐾 Pet" },
+  { key: "other", label: "📦 Other" },
+];
+
+const TARGET_KEYWORDS = {
+  grocery: ["food","snack","chips","cereal","coffee","tea","water","juice","soda","bread","pasta","rice","sauce","soup","candy","chocolate","cookie","cracker","nut","granola","protein bar","frozen","drink","beverage"],
+  health: ["shampoo","conditioner","soap","lotion","deodorant","toothpaste","toothbrush","floss","razor","makeup","skincare","sunscreen","body wash","hair"],
+  cleaning: ["cleaner","detergent","bleach","sponge","mop","broom","trash bag","paper towel","napkin","foil","plastic wrap","ziploc","dish soap","laundry"],
+  clothing: ["shirt","pants","jeans","dress","shoes","socks","underwear","jacket","coat","hat","gloves","scarf","boots","sneakers"],
+  home: ["candle","picture frame","pillow","blanket","towel","curtain","rug","lamp","storage","basket","organizer","decor","vase","mirror"],
+  electronics: ["phone","charger","cable","headphones","speaker","battery","tv","remote","computer","tablet","camera","printer"],
+  toys: ["toy","game","puzzle","doll","lego","book","craft","art","play","kids","baby"],
+  pharmacy: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","bandage","first aid","prescription","otc","melatonin","allergy"],
+  pet: ["dog","cat","pet","treat","litter","leash","collar"],
+};
+
+const classifyTarget = (text) => {
+  const lower = text.toLowerCase();
+  for (const [key, kws] of Object.entries(TARGET_KEYWORDS)) {
+    if (kws.some(k => lower.includes(k))) return key;
+  }
+  return "other";
+};
+
+const LOWES_CATEGORIES = [
+  { key: "lumber", label: "🪵 Lumber & Building" },
+  { key: "tools", label: "🔧 Tools & Hardware" },
+  { key: "windows", label: "🪟 Doors & Windows" },
+  { key: "paint", label: "🎨 Paint" },
+  { key: "electrical", label: "🔌 Electrical" },
+  { key: "plumbing", label: "🚰 Plumbing" },
+  { key: "lawn", label: "🌿 Lawn & Garden" },
+  { key: "flooring", label: "🏠 Flooring" },
+  { key: "hvac", label: "❄️ Heating & Cooling" },
+  { key: "other", label: "📦 Other" },
+];
+
+const LOWES_KEYWORDS = {
+  lumber: ["wood","lumber","plywood","2x4","board","beam","post","framing","osb","drywall","insulation","sheathing","stud"],
+  tools: ["hammer","drill","saw","screwdriver","wrench","pliers","level","tape measure","nail","screw","bolt","nut","washer","tool","sandpaper","chisel","clamp"],
+  windows: ["window","door","screen","lock","handle","hinge","weatherstrip","threshold","garage door"],
+  paint: ["paint","primer","stain","varnish","brush","roller","tray","tape","drop cloth","caulk","spackle","putty"],
+  electrical: ["wire","outlet","switch","breaker","panel","conduit","junction box","light","bulb","led","fixture","plug","extension cord","electrical"],
+  plumbing: ["pipe","faucet","valve","toilet","sink","drain","fitting","pvc","copper","shutoff","clog","sealant","plumbing","water heater"],
+  lawn: ["mulch","soil","seed","fertilizer","plant","flower","tree","shrub","hose","sprinkler","mower","edger","trimmer","rake","shovel","garden"],
+  flooring: ["floor","tile","hardwood","laminate","vinyl","carpet","grout","adhesive","underlayment","baseboard","trim","molding"],
+  hvac: ["furnace","ac","filter","duct","vent","thermostat","hvac","heater","fan","heat pump"],
+};
+
+const classifyLowes = (text) => {
+  const lower = text.toLowerCase();
+  for (const [key, kws] of Object.entries(LOWES_KEYWORDS)) {
+    if (kws.some(k => lower.includes(k))) return key;
+  }
+  return "other";
+};
+
+
 const KEYWORD_MAP = {
   entrance: ["sourdough","artisan bread","specialty bread","baguette"],
   produce: ["lettuce","spinach","kale","cabbage","tomato","tomatoes","onion","onions","garlic","carrot","carrots","celery","potato","potatoes","sweet potato","pepper","peppers","cucumber","zucchini","mushroom","mushrooms","broccoli","cauliflower","avocado","avocados","lime","lemon","limes","lemons","apple","banana","berries","cilantro","parsley","basil","ginger","jalapeno","scallion","shallot","corn","green onion","green beans","arugula","squash","asparagus","roma","fresh herb","cherry tomato"],
@@ -1212,6 +1279,16 @@ export default function App() {
   const [countdown, setCountdown] = useState(null);
   const timerRef = useRef(null);
   const shoppingLoaded = useRef(false);
+  // Store tab: "mb" | "target" | "lowes"
+  const [storeTab, setStoreTab] = useState("mb");
+  // Target list state
+  const [targetItems, setTargetItems] = useState([]);
+  const [targetChecked, setTargetChecked] = useState(new Set());
+  const [targetInput, setTargetInput] = useState("");
+  // Lowes list state
+  const [lowesItems, setLowesItems] = useState([]);
+  const [lowesChecked, setLowesChecked] = useState(new Set());
+  const [lowesInput, setLowesInput] = useState("");
 
   // --- Load recipes from Firestore, seed if empty ---
   useEffect(() => {
@@ -1271,6 +1348,90 @@ export default function App() {
   // --- Persist shopping state to Firestore ---
   const saveShoppingState = (updates) => {
     setDoc(doc(db, "app", "shopping"), updates, { merge: true });
+  };
+
+  // --- Load Target list from Firestore ---
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "app", "target"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setTargetItems(data.items || []);
+        setTargetChecked(new Set(data.checked || []));
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // --- Load Lowes list from Firestore ---
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "app", "lowes"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setLowesItems(data.items || []);
+        setLowesChecked(new Set(data.checked || []));
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const addTargetItem = () => {
+    if (!targetInput.trim()) return;
+    const item = { key: `t${Date.now()}`, text: targetInput.trim(), category: classifyTarget(targetInput.trim()) };
+    const updated = [...targetItems, item];
+    setTargetItems(updated);
+    setDoc(doc(db, "app", "target"), { items: updated, checked: [...targetChecked] }, { merge: true });
+    setTargetInput("");
+  };
+
+  const toggleTargetItem = (key) => {
+    setTargetChecked(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      setDoc(doc(db, "app", "target"), { checked: [...n] }, { merge: true });
+      return n;
+    });
+  };
+
+  const removeTargetItem = (key) => {
+    const updated = targetItems.filter(i => i.key !== key);
+    setTargetItems(updated);
+    setTargetChecked(prev => { const n = new Set(prev); n.delete(key); return n; });
+    setDoc(doc(db, "app", "target"), { items: updated, checked: [...targetChecked].filter(k => k !== key) }, { merge: true });
+  };
+
+  const resetTarget = () => {
+    setTargetItems([]); setTargetChecked(new Set());
+    setDoc(doc(db, "app", "target"), { items: [], checked: [] });
+  };
+
+  const addLowesItem = () => {
+    if (!lowesInput.trim()) return;
+    const item = { key: `l${Date.now()}`, text: lowesInput.trim(), category: classifyLowes(lowesInput.trim()) };
+    const updated = [...lowesItems, item];
+    setLowesItems(updated);
+    setDoc(doc(db, "app", "lowes"), { items: updated, checked: [...lowesChecked] }, { merge: true });
+    setLowesInput("");
+  };
+
+  const toggleLowesItem = (key) => {
+    setLowesChecked(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      setDoc(doc(db, "app", "lowes"), { checked: [...n] }, { merge: true });
+      return n;
+    });
+  };
+
+  const removeLowesItem = (key) => {
+    const updated = lowesItems.filter(i => i.key !== key);
+    setLowesItems(updated);
+    setLowesChecked(prev => { const n = new Set(prev); n.delete(key); return n; });
+    setDoc(doc(db, "app", "lowes"), { items: updated, checked: [...lowesChecked].filter(k => k !== key) }, { merge: true });
+  };
+
+  const resetLowes = () => {
+    setLowesItems([]); setLowesChecked(new Set());
+    setDoc(doc(db, "app", "lowes"), { items: [], checked: [] });
   };
 
   // --- Computed shopping items ---
@@ -1470,86 +1631,203 @@ export default function App() {
 
   // --- Shopping view ---
   if (view==="shopping") {
+    const TARGET_RED = "#cc0000";
+    const LOWES_BLUE = "#004990";
+
+    // Store tab colors
+    const storeColor = storeTab === "mb" ? MB_RED : storeTab === "target" ? TARGET_RED : LOWES_BLUE;
+    const storeDark = storeTab === "mb" ? MB_DARK : storeTab === "target" ? "#990000" : "#003370";
+    const storeName = storeTab === "mb" ? "Market Basket · Merchants Way" : storeTab === "target" ? "Target" : "Lowe's / Home Depot";
+
+    // Target grouped
+    const targetGrouped = {};
+    TARGET_CATEGORIES.forEach(c => targetGrouped[c.key] = []);
+    targetItems.forEach(item => { (targetGrouped[item.category] || targetGrouped["other"]).push(item); });
+    const targetActiveCats = TARGET_CATEGORIES.filter(c => targetGrouped[c.key]?.length > 0);
+    const targetTotal = targetItems.length;
+    const targetCheckedCount = targetItems.filter(i => targetChecked.has(i.key)).length;
+    const targetPct = targetTotal > 0 ? Math.round((targetCheckedCount / targetTotal) * 100) : 0;
+
+    // Lowes grouped
+    const lowesGrouped = {};
+    LOWES_CATEGORIES.forEach(c => lowesGrouped[c.key] = []);
+    lowesItems.forEach(item => { (lowesGrouped[item.category] || lowesGrouped["other"]).push(item); });
+    const lowesActiveCats = LOWES_CATEGORIES.filter(c => lowesGrouped[c.key]?.length > 0);
+    const lowesTotal = lowesItems.length;
+    const lowesCheckedCount = lowesItems.filter(i => lowesChecked.has(i.key)).length;
+    const lowesPct = lowesTotal > 0 ? Math.round((lowesCheckedCount / lowesTotal) * 100) : 0;
+
+    const currentTotal = storeTab === "mb" ? total : storeTab === "target" ? targetTotal : lowesTotal;
+    const currentChecked = storeTab === "mb" ? checked : storeTab === "target" ? targetCheckedCount : lowesCheckedCount;
+    const currentPct = storeTab === "mb" ? pct : storeTab === "target" ? targetPct : lowesPct;
+    const currentBarColor = currentPct===100?"#22c55e":currentPct>=66?"#84cc16":"#ffe066";
+
+    const renderItem = (item, done, onToggle, onRemove, showAisle, aisle, color) => (
+      <div key={item.key} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee",opacity:done?0.5:1}}>
+        <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?color:"#ccc"}`,background:done?color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+          {done&&<span style={{color:"white",fontSize:11,fontWeight:700}}>✓</span>}
+        </div>
+        <div onClick={()=>onToggle(item.key)} style={{flex:1,fontSize:15,textDecoration:done?"line-through":"none",color:done?"#aaa":"#222",cursor:"pointer"}}>{item.text}</div>
+        <span onClick={()=>onRemove(item.key)} style={{fontSize:13,color:"#ccc",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
+        {showAisle && <span style={{fontSize:10,color:"#bbb",background:"#f5f5f0",borderRadius:4,padding:"2px 6px",border:"1px solid #e8e8e2",whiteSpace:"nowrap",flexShrink:0}}>{aisle}</span>}
+      </div>
+    );
+
     return (
       <div style={{fontFamily:font,background:"#f5f5f0",minHeight:"100vh",color:"#222",paddingBottom:40}}>
-        <div style={{background:MB_RED,color:"white",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        {/* Header */}
+        <div style={{background:storeColor,color:"white",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
-            <div style={{fontSize:12,opacity:0.85}}>Market Basket · Merchants Way</div>
+            <div style={{fontSize:12,opacity:0.85}}>{storeName}</div>
             <div style={{fontSize:20,fontWeight:700,letterSpacing:0.5}}>🛒 Shopping List</div>
           </div>
-          <button onClick={resetShopping} style={{background:MB_DARK,color:"white",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font}}>Reset</button>
+          <button onClick={storeTab==="mb"?resetShopping:storeTab==="target"?resetTarget:resetLowes}
+            style={{background:storeDark,color:"white",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font}}>Reset</button>
         </div>
-        <div style={{background:MB_DARK,height:14,position:"relative"}}>
-          <div style={{background:barColor,height:14,width:pct+"%",transition:"width 0.4s ease, background 0.4s ease"}}/>
-          {pct>8&&<span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",fontSize:10,fontWeight:700,color:pct>45?"#1a1a1a":"#fff8f0",letterSpacing:0.5}}>{pct}%</span>}
+
+        {/* Store tabs */}
+        <div style={{display:"flex",background:storeDark}}>
+          {[{key:"mb",label:"🧺 Market Basket"},{key:"target",label:"🎯 Target"},{key:"lowes",label:"🔨 Lowe's"}].map(s=>(
+            <button key={s.key} onClick={()=>setStoreTab(s.key)}
+              style={{flex:1,padding:"10px 4px",border:"none",cursor:"pointer",fontFamily:font,fontSize:11,fontWeight:storeTab===s.key?700:400,
+                background:storeTab===s.key?"white":storeDark,
+                color:storeTab===s.key?storeColor:"rgba(255,255,255,0.75)",
+                borderRadius:storeTab===s.key?"6px 6px 0 0":"0",transition:"all 0.2s"}}>
+              {s.label}
+            </button>
+          ))}
         </div>
+
+        {/* Progress bar */}
+        <div style={{background:storeDark,height:14,position:"relative"}}>
+          <div style={{background:currentBarColor,height:14,width:currentPct+"%",transition:"width 0.4s ease"}}/>
+          {currentPct>8&&<span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",fontSize:10,fontWeight:700,color:currentPct>45?"#1a1a1a":"#fff8f0"}}>{currentPct}%</span>}
+        </div>
+
+        {/* Count bar */}
         <div style={{background:"#fff8f0",padding:"8px 20px",fontSize:13,color:"#555",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e0e0d8"}}>
-          <span><strong style={{color:MB_RED}}>{checked}</strong> of <strong style={{color:MB_RED}}>{total}</strong> items &nbsp;<span style={{color:"#aaa",fontSize:12}}>{total-checked>0?`· ${total-checked} remaining`:"· all done!"}</span></span>
-          {countdown&&<span style={{color:MB_RED,fontWeight:600,fontSize:12}}>{countdown}</span>}
-          <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${MB_RED}`,color:MB_RED,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Recipes</button>
+          <span><strong style={{color:storeColor}}>{currentChecked}</strong> of <strong style={{color:storeColor}}>{currentTotal}</strong> items &nbsp;
+            <span style={{color:"#aaa",fontSize:12}}>{currentTotal-currentChecked>0?`· ${currentTotal-currentChecked} remaining`:"· all done!"}</span>
+          </span>
+          {storeTab==="mb"&&countdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{countdown}</span>}
+          <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${storeColor}`,color:storeColor,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Recipes</button>
         </div>
-        <div style={{padding:"10px 16px 0"}}>
-          <div style={{display:"flex",gap:8}}>
-            <input value={manualInput} onChange={e=>setManualInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addManual()} placeholder="Add item to list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
-            <button onClick={addManual} style={{background:MB_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
-          </div>
-          {checkedIds.size>0&&<div style={{fontSize:12,color:"#888",marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
-        </div>
-        {total===0?(
-          <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Check recipes from the list or add items above.</p>
-        ):(
-          <div style={{padding:"8px 0"}}>
-            {activeSections.map(sec=>(
-              <div key={sec.key} style={{margin:"10px 16px 0"}}>
-                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#888",padding:"6px 4px 4px",borderBottom:"1px solid #ddd",marginBottom:4}}>{sec.label}</div>
-                {grouped[sec.key].map(item=>{
-                  const done=checkedItems.has(item.key);
-                  const isEditingThis=editingKey===item.key;
-                  const recipeNames=item.recipeList||[item.recipe];
-                  return (
-                    <div key={item.key} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee",opacity:done?0.5:1}}>
-                      <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?MB_RED:"#ccc"}`,background:done?MB_RED:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:3}}>
-                        {done&&<span style={{color:"white",fontSize:11,fontWeight:700}}>✓</span>}
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        {isEditingThis?(
-                          <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)}
-                            onKeyDown={e=>{if(e.key==="Enter")saveEdit(item.key);if(e.key==="Escape")setEditingKey(null);}}
-                            onBlur={()=>saveEdit(item.key)}
-                            style={{width:"100%",fontSize:14,padding:"3px 8px",border:`1.5px solid ${MB_RED}`,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box"}}/>
-                        ):(
-                          <>
-                            <div onClick={()=>toggleItem(item.key)} style={{fontSize:15,textDecoration:done?"line-through":"none",color:done?"#aaa":"#222",cursor:"pointer"}}>{item.text}</div>
-                            <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
-                              {recipeNames.map((name,idx)=>{
-                                const r=recipes.find(r=>r.title===name.trim());
-                                return r?(
-                                  <span key={idx} onClick={()=>{setSelectedId(r.id);setView("recipes");}} style={{fontSize:11,color:MB_RED,fontStyle:"italic",textDecoration:"underline",cursor:"pointer"}}>
-                                    {name}{idx<recipeNames.length-1?",":""}
-                                  </span>
-                                ):(
-                                  <span key={idx} style={{fontSize:11,color:"#aaa",fontStyle:"italic"}}>{name}</span>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <span onClick={e=>startEdit(item.key,item.text,e)} style={{fontSize:13,color:"#bbb",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✎</span>
-                      <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:"#ccc",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
-                      <span style={{fontSize:10,color:"#bbb",background:"#f5f5f0",borderRadius:4,padding:"2px 6px",border:"1px solid #e8e8e2",whiteSpace:"nowrap",flexShrink:0}}>A{sec.aisle}</span>
-                    </div>
-                  );
-                })}
+
+        {/* Market Basket list */}
+        {storeTab==="mb"&&(
+          <div>
+            <div style={{padding:"10px 16px 0"}}>
+              <div style={{display:"flex",gap:8}}>
+                <input value={manualInput} onChange={e=>setManualInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addManual()} placeholder="Add item to list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
+                <button onClick={addManual} style={{background:MB_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
-            ))}
+              {checkedIds.size>0&&<div style={{fontSize:12,color:"#888",marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
+            </div>
+            {total===0?(
+              <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Check recipes or add items above.</p>
+            ):(
+              <div style={{padding:"8px 0"}}>
+                {activeSections.map(sec=>(
+                  <div key={sec.key} style={{margin:"10px 16px 0"}}>
+                    <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#888",padding:"6px 4px 4px",borderBottom:"1px solid #ddd",marginBottom:4}}>{sec.label}</div>
+                    {grouped[sec.key].map(item=>{
+                      const done=checkedItems.has(item.key);
+                      const isEditingThis=editingKey===item.key;
+                      const recipeNames=item.recipeList||[item.recipe];
+                      return (
+                        <div key={item.key} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee",opacity:done?0.5:1}}>
+                          <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?MB_RED:"#ccc"}`,background:done?MB_RED:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:3}}>
+                            {done&&<span style={{color:"white",fontSize:11,fontWeight:700}}>✓</span>}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            {isEditingThis?(
+                              <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)}
+                                onKeyDown={e=>{if(e.key==="Enter")saveEdit(item.key);if(e.key==="Escape")setEditingKey(null);}}
+                                onBlur={()=>saveEdit(item.key)}
+                                style={{width:"100%",fontSize:14,padding:"3px 8px",border:`1.5px solid ${MB_RED}`,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box"}}/>
+                            ):(
+                              <>
+                                <div onClick={()=>toggleItem(item.key)} style={{fontSize:15,textDecoration:done?"line-through":"none",color:done?"#aaa":"#222",cursor:"pointer"}}>{item.text}</div>
+                                <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
+                                  {recipeNames.map((name,idx)=>{
+                                    const r=recipes.find(r=>r.title===name.trim());
+                                    return r?(
+                                      <span key={idx} onClick={()=>{setSelectedId(r.id);setView("recipes");}} style={{fontSize:11,color:MB_RED,fontStyle:"italic",textDecoration:"underline",cursor:"pointer"}}>
+                                        {name}{idx<recipeNames.length-1?",":""}
+                                      </span>
+                                    ):(
+                                      <span key={idx} style={{fontSize:11,color:"#aaa",fontStyle:"italic"}}>{name}</span>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <span onClick={e=>startEdit(item.key,item.text,e)} style={{fontSize:13,color:"#bbb",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✎</span>
+                          <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:"#ccc",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
+                          <span style={{fontSize:10,color:"#bbb",background:"#f5f5f0",borderRadius:4,padding:"2px 6px",border:"1px solid #e8e8e2",whiteSpace:"nowrap",flexShrink:0}}>A{sec.aisle}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Target list */}
+        {storeTab==="target"&&(
+          <div>
+            <div style={{padding:"10px 16px 0"}}>
+              <div style={{display:"flex",gap:8}}>
+                <input value={targetInput} onChange={e=>setTargetInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTargetItem()} placeholder="Add item to Target list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
+                <button onClick={addTargetItem} style={{background:TARGET_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
+              </div>
+            </div>
+            {targetTotal===0?(
+              <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Add items above.</p>
+            ):(
+              <div style={{padding:"8px 0"}}>
+                {targetActiveCats.map(cat=>(
+                  <div key={cat.key} style={{margin:"10px 16px 0"}}>
+                    <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#888",padding:"6px 4px 4px",borderBottom:"1px solid #ddd",marginBottom:4}}>{cat.label}</div>
+                    {targetGrouped[cat.key].map(item=>renderItem(item,targetChecked.has(item.key),toggleTargetItem,removeTargetItem,false,"",TARGET_RED))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Lowes list */}
+        {storeTab==="lowes"&&(
+          <div>
+            <div style={{padding:"10px 16px 0"}}>
+              <div style={{display:"flex",gap:8}}>
+                <input value={lowesInput} onChange={e=>setLowesInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLowesItem()} placeholder="Add item to Lowe's list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
+                <button onClick={addLowesItem} style={{background:LOWES_BLUE,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
+              </div>
+            </div>
+            {lowesTotal===0?(
+              <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Add items above.</p>
+            ):(
+              <div style={{padding:"8px 0"}}>
+                {lowesActiveCats.map(cat=>(
+                  <div key={cat.key} style={{margin:"10px 16px 0"}}>
+                    <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#888",padding:"6px 4px 4px",borderBottom:"1px solid #ddd",marginBottom:4}}>{cat.label}</div>
+                    {lowesGrouped[cat.key].map(item=>renderItem(item,lowesChecked.has(item.key),toggleLowesItem,removeLowesItem,false,"",LOWES_BLUE))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
     );
   }
 
-  // --- Recipe detail view ---
+    // --- Recipe detail view ---
   if (selected) {
     const ratio=selected.servings/selected.baseServings;
     const isEditing=editingRecipeId===selected.id;
