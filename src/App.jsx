@@ -1383,6 +1383,27 @@ export default function App() {
   const lowesTimerRef = useRef(null);
   const lowesResetAtRef = useRef(null);
 
+  // --- One-time migration: add notes and storage fields to existing recipes ---
+  useEffect(() => {
+    const runMigration = async () => {
+      const snap = await getDocs(collection(db, "recipes"));
+      const batch = writeBatch(db);
+      let needsUpdate = false;
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.notes === undefined || data.storage === undefined) {
+          batch.update(doc(db, "recipes", d.id), {
+            notes: data.notes ?? "",
+            storage: data.storage ?? "",
+          });
+          needsUpdate = true;
+        }
+      });
+      if (needsUpdate) await batch.commit();
+    };
+    runMigration();
+  }, []);
+
   // --- Load recipes from Firestore, seed if empty ---
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "recipes"), async (snap) => {
