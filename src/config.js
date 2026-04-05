@@ -58,7 +58,7 @@ export const TARGET_KEYWORDS = {
   pet: ["dog","cat","pet","treat","litter","leash","collar"],
 };
 
-const classifyTarget = (text) => {
+export const classifyTarget = (text) => {
   const lower = text.toLowerCase();
   for (const [key, kws] of Object.entries(TARGET_KEYWORDS)) {
     if (kws.some(k => lower.includes(k))) return key;
@@ -91,14 +91,13 @@ export const LOWES_KEYWORDS = {
   hvac: ["furnace","ac","filter","duct","vent","thermostat","hvac","heater","fan","heat pump"],
 };
 
-const classifyLowes = (text) => {
+export const classifyLowes = (text) => {
   const lower = text.toLowerCase();
   for (const [key, kws] of Object.entries(LOWES_KEYWORDS)) {
     if (kws.some(k => lower.includes(k))) return key;
   }
   return "other";
 };
-
 
 export const KEYWORD_MAP = {
   entrance: ["sourdough","artisan bread","specialty bread","baguette"],
@@ -127,7 +126,7 @@ export const KEYWORD_MAP = {
   dairy: ["milk","cream","sour cream","cream cheese","parmesan","mozzarella","cheddar","ricotta","half and half","heavy cream","buttermilk","cottage cheese","whipping cream","brie","gouda","feta","string cheese","yogurt","cheese","gruyere","cotija","pecorino","butter","pie crust","pie shell"],
 };
 
-const classifyIngredient = (ing) => {
+export const classifyIngredient = (ing) => {
   const lower = ing.toLowerCase();
   if (/shrimp|haddock|salmon|tuna|cod|tilapia|crab|lobster|scallop|clam|mussel|oyster|anchovy|swordfish|halibut|flounder|fish fillet/.test(lower)) return "seafood";
   if (/broth|stock|clam juice|bone broth/.test(lower)) return "eggs";
@@ -215,156 +214,6 @@ export const PRODUCE_CONVERSIONS = [
   { match: /spinach|kale|arugula/i, unit: /(\d*\.?\d+)\s*cup/i, out: (_,a,__,raw) => { const l=(raw||"").match(/spinach|kale|arugula/i); return `${a<=2?"5 oz":"10 oz"} ${l?l[0]:"spinach"}`; } },
 ];
 
-const toShoppingText = (raw) => {
-  const lower = raw.toLowerCase();
-  if (lower.includes("wine")) return raw.replace(/^[\d\s./]+\s*(cup|cups|tbsp|tsp|oz|ml|l)?\s*/i, "").replace(PREP_STRIP, "").trim();
-  if (lower.includes("frozen")) return raw.trim();
-  if (lower.includes("broth") || lower.includes("stock")) {
-    if (lower.includes("chicken broth")) return "chicken broth";
-    if (lower.includes("beef broth")) return "beef broth";
-    if (lower.includes("vegetable broth")) return "vegetable broth";
-    if (lower.includes("bone broth")) return "bone broth";
-    return "broth";
-  }
-  for (const sp of SPICES_AND_PANTRY) {
-    if (lower.includes(sp)) {
-      const cleaned = raw.replace(/^[\d\s./]+\s*(tbsp|tsp|cup|cups|oz|pinch|dash|g|kg|ml|lb|lbs)?\s*/i, "").replace(PREP_STRIP, "").replace(COOK_WORDS, "").replace(/\s{2,}/g, " ").replace(/,\s*$/, "").trim();
-      return cleaned || sp;
-    }
-  }
-  for (const rule of MEAT_CONVERSIONS) {
-    if (rule.match.test(lower)) {
-      if (rule.unit) { const m = raw.match(rule.unit); if (m) return rule.out(parseFloat(m[1])); }
-      else { const am = raw.match(/(\d*\.?\d+)\s*(lb|lbs)/i); return am ? `${parseFloat(am[1])} lb ${rule.out}` : String(rule.out); }
-    }
-  }
-  for (const rule of PRODUCE_CONVERSIONS) {
-    if (rule.match.test(lower)) {
-      const um = raw.match(rule.unit);
-      if (um) { const qty = parseFloat(um[1])||1; const result = rule.out(qty, qty, um, raw); if (result) return result; }
-    }
-  }
-  let cleaned = raw.replace(PREP_STRIP, "").replace(/,\s*$/, "").trim();
-  cleaned = cleaned.replace(COOK_WORDS, "").replace(/\s{2,}/g, " ").replace(/,\s*$/, "").trim();
-  return cleaned || raw;
-};
-
-const parseAmount = (text) => {
-  const m = text.match(/^([\d./\s]+)\s*(lb|lbs|oz|can|cans|cup|cups|tbsp|tsp|clove|cloves|stalk|stalks|head|heads|bunch|bunches|piece|pieces)?\s*(.+)/i);
-  if (!m) return { qty: null, unit: null, name: text.trim().toLowerCase() };
-  const rawQty = m[1].trim();
-  let qty = rawQty.includes('/') ? rawQty.split('/').reduce((a,b)=>parseFloat(a)/parseFloat(b)) : parseFloat(rawQty);
-  if (isNaN(qty)) return { qty: null, unit: null, name: text.trim().toLowerCase() };
-  const unitMap = { lbs:"lb",lb:"lb",oz:"oz",can:"can",cans:"can",cup:"cup",cups:"cup",tbsp:"tbsp",tsp:"tsp",clove:"clove",cloves:"clove",stalk:"stalk",stalks:"stalk",head:"head",heads:"head",bunch:"bunch",bunches:"bunch" };
-  return { qty, unit: unitMap[(m[2]||"").toLowerCase()] || (m[2]||"").toLowerCase(), name: m[3].trim().toLowerCase() };
-};
-
-const formatQty = (qty) => {
-  if (!qty) return "";
-  const r = Math.round(qty*4)/4, w = Math.floor(r), f = r-w;
-  const fs = f===0.25?"1/4":f===0.5?"1/2":f===0.75?"3/4":"";
-  if (w===0) return fs; if (fs) return `${w} ${fs}`; return `${w}`;
-};
-
-// Produce sub-section ordering — matches Doug's path through the produce section
-export const PRODUCE_ORDER = [
-  // Onions / Garlic / Potatoes
-  "onion","onions","garlic","shallot","scallion","green onion","potato","potatoes","sweet potato","ginger",
-  // Broccoli area
-  "broccoli","cauliflower","cabbage","kale","arugula","lettuce","celery","carrot","carrots","corn","green beans","squash","zucchini","cucumber","pepper","peppers","jalapeno","poblano","tomato","tomatoes","cherry tomato","roma","fresh herb","cilantro","parsley","basil","thyme","rosemary",
-  // Asparagus area
-  "asparagus",
-  // Apples
-  "apple",
-  // Bananas
-  "banana",
-  // Berries / citrus
-  "berries","lime","lemon","limes","lemons","orange",
-  // Mushrooms
-  "mushroom","mushrooms",
-  // Spinach / Avocado
-  "spinach","avocado","avocados",
-];
-
-const produceSubSort = (items) => {
-  return [...items].sort((a, b) => {
-    const aText = a.text.toLowerCase();
-    const bText = b.text.toLowerCase();
-    const aIdx = PRODUCE_ORDER.findIndex(k => aText.includes(k));
-    const bIdx = PRODUCE_ORDER.findIndex(k => bText.includes(k));
-    if (aIdx === -1 && bIdx === -1) return 0;
-    if (aIdx === -1) return 1;
-    if (bIdx === -1) return -1;
-    return aIdx - bIdx;
-  });
-};
-
-
-const combineItems = (items) => {
-  const groups = {};
-  items.forEach(item => {
-    const p = parseAmount(item.text);
-    const unit = p.unit||"";
-    const key = p.name+"|"+unit;
-    if (!groups[key]) groups[key] = { ...item, parsed:p, unit, totalQty:p.qty||0, count:1, recipes:[item.recipe] };
-    else { groups[key].totalQty += (p.qty||0); groups[key].count += 1; if (!groups[key].recipes.includes(item.recipe)) groups[key].recipes.push(item.recipe); }
-  });
-  return Object.values(groups).map(g => {
-    let displayText;
-    if (!g.parsed.qty || g.count===1) displayText = g.text;
-    else { const qs=formatQty(g.totalQty); const u=g.unit?` ${g.unit}`:""; displayText=`${qs}${u} ${g.parsed.name}`.trim(); }
-    return { ...g, text:displayText, recipeList:g.recipes };
-  });
-};
-
-
-  if (match.includes("/")) { const [n,d]=match.split("/").map(Number); const v=(n/d)*ratio; return v%1===0?v.toString():v.toFixed(2).replace(/\.?0+$/,""); }
-  const v=parseFloat(match)*ratio; if(v%1===0) return v.toString(); return v.toFixed(2).replace(/\.?0+$/,"");
-});
- dougslist config — your personal settings
-// Change these to customize the app for your household
-
-export const classifyTarget = (text) => {
-  const lower = text.toLowerCase();
-  for (const [key, kws] of Object.entries(TARGET_KEYWORDS)) {
-    if (kws.some(k => lower.includes(k))) return key;
-  }
-  return "other";
-};
-
-export const classifyLowes = (text) => {
-  const lower = text.toLowerCase();
-  for (const [key, kws] of Object.entries(LOWES_KEYWORDS)) {
-    if (kws.some(k => lower.includes(k))) return key;
-  }
-  return "other";
-};
-
-export const classifyIngredient = (ing) => {
-  const lower = ing.toLowerCase();
-  if (/shrimp|haddock|salmon|tuna|cod|tilapia|crab|lobster|scallop|clam|mussel|oyster|anchovy|swordfish|halibut|flounder|fish fillet/.test(lower)) return "seafood";
-  if (/broth|stock|clam juice|bone broth/.test(lower)) return "eggs";
-  if (/\beggs?\b|\bbacon\b/.test(lower)) return "eggs";
-  if (/tomato paste|tomato sauce/.test(lower)) return "condiments";
-  if (/frozen|dumpling/.test(lower)) return "frozen1";
-  if (/pie crust|pie shell/.test(lower)) return "dairy";
-  if (/\bbutter\b/.test(lower)) return "dairy";
-  if (/dijon/.test(lower)) return "condiments";
-  if (/oil/.test(lower)) return "condiments";
-  if (/wine/.test(lower)) return "beverages2";
-  const spiceKeys = KEYWORD_MAP["spices"] || [];
-  if (spiceKeys.some(k => lower === k || lower.startsWith(k+" ") || lower.endsWith(" "+k) || lower.includes(" "+k+" "))) return "spices";
-  if (/salt|pepper/.test(lower) && !/salt pork|bell pepper|red pepper flakes|black pepper/.test(lower)) return "spices";
-  const condimentKeys = KEYWORD_MAP["condiments"] || [];
-  if (condimentKeys.some(k => lower.includes(k))) return "condiments";
-  for (const sec of STORE_SECTIONS) {
-    if (["spices","condiments","frozen1","frozen2","seafood","eggs"].includes(sec.key)) continue;
-    const kws = KEYWORD_MAP[sec.key] || [];
-    if (kws.some(k => lower.includes(k))) return sec.key;
-  }
-  return "kitchen";
-};
-
 export const toShoppingText = (raw) => {
   const lower = raw.toLowerCase();
   if (lower.includes("wine")) return raw.replace(/^[\d\s./]+\s*(cup|cups|tbsp|tsp|oz|ml|l)?\s*/i, "").replace(PREP_STRIP, "").trim();
@@ -416,6 +265,30 @@ export const formatQty = (qty) => {
   if (w===0) return fs; if (fs) return `${w} ${fs}`; return `${w}`;
 };
 
+export const PRODUCE_ORDER = [
+  "onion","onions","garlic","shallot","scallion","green onion","potato","potatoes","sweet potato","ginger",
+  "broccoli","cauliflower","cabbage","kale","arugula","lettuce","celery","carrot","carrots","corn","green beans","squash","zucchini","cucumber","pepper","peppers","jalapeno","poblano","tomato","tomatoes","cherry tomato","roma","fresh herb","cilantro","parsley","basil","thyme","rosemary",
+  "asparagus",
+  "apple",
+  "banana",
+  "berries","lime","lemon","limes","lemons","orange",
+  "mushroom","mushrooms",
+  "spinach","avocado","avocados",
+];
+
+export const produceSubSort = (items) => {
+  return [...items].sort((a, b) => {
+    const aText = a.text.toLowerCase();
+    const bText = b.text.toLowerCase();
+    const aIdx = PRODUCE_ORDER.findIndex(k => aText.includes(k));
+    const bIdx = PRODUCE_ORDER.findIndex(k => bText.includes(k));
+    if (aIdx === -1 && bIdx === -1) return 0;
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    return aIdx - bIdx;
+  });
+};
+
 export const combineItems = (items) => {
   const groups = {};
   items.forEach(item => {
@@ -430,18 +303,5 @@ export const combineItems = (items) => {
     if (!g.parsed.qty || g.count===1) displayText = g.text;
     else { const qs=formatQty(g.totalQty); const u=g.unit?` ${g.unit}`:""; displayText=`${qs}${u} ${g.parsed.name}`.trim(); }
     return { ...g, text:displayText, recipeList:g.recipes };
-  });
-};
-
-export const produceSubSort = (items) => {
-  return [...items].sort((a, b) => {
-    const aText = a.text.toLowerCase();
-    const bText = b.text.toLowerCase();
-    const aIdx = PRODUCE_ORDER.findIndex(k => aText.includes(k));
-    const bIdx = PRODUCE_ORDER.findIndex(k => bText.includes(k));
-    if (aIdx === -1 && bIdx === -1) return 0;
-    if (aIdx === -1) return 1;
-    if (bIdx === -1) return -1;
-    return aIdx - bIdx;
   });
 };
