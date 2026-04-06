@@ -39,13 +39,12 @@ const fmtTime = (s) => {
   return `${m}:${String(sec).padStart(2,"0")}`;
 };
 
-// Request notification permission
 const requestNotificationPermission = async () => {
   try {
     if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission();
     }
-  } catch(e) { /* silently fail */ }
+  } catch(e) {}
 };
 
 const sendNotification = (title, body) => {
@@ -53,7 +52,7 @@ const sendNotification = (title, body) => {
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification(title, { body });
     }
-  } catch(e) { /* silently fail — don't crash the app */ }
+  } catch(e) {}
 };
 
 function StepTimer({ seconds, stepText, kraft, tabBg, cream, darkBrown }) {
@@ -71,9 +70,7 @@ function StepTimer({ seconds, stepText, kraft, tabBg, cream, darkBrown }) {
             clearInterval(intervalRef.current);
             setRunning(false);
             setDone(true);
-            try {
-              sendNotification("⏱️ Timer Done!", stepText ? `Step complete: ${stepText.slice(0,60)}` : "Your cooking timer is done!");
-            } catch(e) { /* silently fail */ }
+            try { sendNotification("⏱️ Timer Done!", stepText ? `Step complete: ${stepText.slice(0,60)}` : "Your cooking timer is done!"); } catch(e) {}
             return 0;
           }
           return r - 1;
@@ -155,13 +152,23 @@ export default function App() {
   const [photoImporting, setPhotoImporting] = useState(false);
   const [photoError, setPhotoError] = useState(null);
   const photoInputRef = useRef(null);
+
+  // --- Import dropdown ---
+  const [showImportDropdown, setShowImportDropdown] = useState(false);
+  const importDropdownRef = useRef(null);
+
+  // --- URL import ---
+  const [showUrlImport, setShowUrlImport] = useState(false);
+  const [urlImportValue, setUrlImportValue] = useState("");
+  const [urlImporting, setUrlImporting] = useState(false);
+  const [urlImportError, setUrlImportError] = useState(null);
+
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Shopping state - persisted in Firestore
-  const [checkedIds, setCheckedIds] = useState(new Set());       // recipe IDs checked for shopping
-  const [checkedItems, setCheckedItems] = useState(new Set());   // individual item keys checked off
-  const [manualItems, setManualItems] = useState([]);            // freeform grocery items
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [checkedItems, setCheckedItems] = useState(new Set());
+  const [manualItems, setManualItems] = useState([]);
   const [removedKeys, setRemovedKeys] = useState(new Set());
   const [manualInput, setManualInput] = useState("");
   const [manualQty, setManualQty] = useState("");
@@ -190,9 +197,7 @@ export default function App() {
     }
   };
   const shoppingLoaded = useRef(false);
-  // Store tab: "mb" | "target" | "lowes"
   const [storeTab, setStoreTab] = useState("mb");
-  // Target list state
   const [targetItems, setTargetItems] = useState([]);
   const [targetChecked, setTargetChecked] = useState(new Set());
   const [targetInput, setTargetInput] = useState("");
@@ -200,7 +205,6 @@ export default function App() {
   const [targetCountdown, setTargetCountdown] = useState(null);
   const targetTimerRef = useRef(null);
   const targetResetAtRef = useRef(null);
-  // Lowes list state
   const [lowesItems, setLowesItems] = useState([]);
   const [lowesChecked, setLowesChecked] = useState(new Set());
   const [lowesInput, setLowesInput] = useState("");
@@ -209,7 +213,18 @@ export default function App() {
   const lowesTimerRef = useRef(null);
   const lowesResetAtRef = useRef(null);
 
-  // --- One-time migration: add notes and storage fields to existing recipes ---
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (importDropdownRef.current && !importDropdownRef.current.contains(e.target)) {
+        setShowImportDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // --- One-time migration ---
   useEffect(() => {
     const runMigration = async () => {
       const snap = await getDocs(collection(db, "recipes"));
@@ -218,10 +233,7 @@ export default function App() {
       snap.docs.forEach(d => {
         const data = d.data();
         if (data.notes === undefined || data.storage === undefined) {
-          batch.update(doc(db, "recipes", d.id), {
-            notes: data.notes ?? "",
-            storage: data.storage ?? "",
-          });
+          batch.update(doc(db, "recipes", d.id), { notes: data.notes ?? "", storage: data.storage ?? "" });
           needsUpdate = true;
         }
       });
@@ -230,7 +242,6 @@ export default function App() {
     runMigration();
   }, []);
 
-  // --- Load recipes from Firestore ---
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "recipes"), (snap) => {
       const loaded = snap.docs.map(d => ({ id: d.id, ...d.data(), servings: d.data().servings || d.data().baseServings }));
@@ -240,7 +251,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // --- Load shopping state from Firestore ---
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "app", "shopping"), (snap) => {
       if (snap.exists()) {
@@ -249,11 +259,9 @@ export default function App() {
         setCheckedItems(new Set(data.checkedItems || []));
         setManualItems(data.manualItems || []);
         setRemovedKeys(new Set(data.removedKeys || []));
-        // Restore countdown if timer was running before refresh
         if (data.resetAt && !timerRef.current) {
           const rem = data.resetAt - Date.now();
           if (rem <= 0) {
-            // Expired while app was closed — clear everything
             setDoc(doc(db, "app", "shopping"), { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null }, { merge: true });
             setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
           } else {
@@ -272,12 +280,10 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // --- Persist shopping state to Firestore ---
   const saveShoppingState = (updates) => {
     setDoc(doc(db, "app", "shopping"), updates, { merge: true });
   };
 
-  // --- Load Target list from Firestore ---
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "app", "target"), (snap) => {
       if (snap.exists()) {
@@ -302,7 +308,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // --- Load Lowes list from Firestore ---
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "app", "lowes"), (snap) => {
       if (snap.exists()) {
@@ -327,7 +332,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // --- Auto-reset timer for Target ---
   useEffect(() => {
     const targetTotal = targetItems.length;
     const targetCheckedCount = targetItems.filter(i => targetChecked.has(i.key)).length;
@@ -349,7 +353,6 @@ export default function App() {
     }
   }, [targetChecked, targetItems]);
 
-  // --- Auto-reset timer for Lowes ---
   useEffect(() => {
     const lowesTotal = lowesItems.length;
     const lowesCheckedCount = lowesItems.filter(i => lowesChecked.has(i.key)).length;
@@ -378,14 +381,12 @@ export default function App() {
     const updated = [...targetItems, item];
     setTargetItems(updated);
     setDoc(doc(db, "app", "target"), { items: updated, checked: [...targetChecked] }, { merge: true });
-    setTargetInput("");
-    setTargetQty("");
+    setTargetInput(""); setTargetQty("");
   };
 
   const toggleTargetItem = (key) => {
     setTargetChecked(prev => {
-      const n = new Set(prev);
-      n.has(key) ? n.delete(key) : n.add(key);
+      const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key);
       setDoc(doc(db, "app", "target"), { checked: [...n] }, { merge: true });
       return n;
     });
@@ -399,8 +400,7 @@ export default function App() {
   };
 
   const resetTarget = () => {
-    setTargetItems([]); setTargetChecked(new Set());
-    setTargetCountdown(null);
+    setTargetItems([]); setTargetChecked(new Set()); setTargetCountdown(null);
     if (targetTimerRef.current) { clearInterval(targetTimerRef.current); targetTimerRef.current = null; }
     targetResetAtRef.current = null;
     setDoc(doc(db, "app", "target"), { items: [], checked: [], resetAt: null });
@@ -413,14 +413,12 @@ export default function App() {
     const updated = [...lowesItems, item];
     setLowesItems(updated);
     setDoc(doc(db, "app", "lowes"), { items: updated, checked: [...lowesChecked] }, { merge: true });
-    setLowesInput("");
-    setLowesQty("");
+    setLowesInput(""); setLowesQty("");
   };
 
   const toggleLowesItem = (key) => {
     setLowesChecked(prev => {
-      const n = new Set(prev);
-      n.has(key) ? n.delete(key) : n.add(key);
+      const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key);
       setDoc(doc(db, "app", "lowes"), { checked: [...n] }, { merge: true });
       return n;
     });
@@ -434,14 +432,12 @@ export default function App() {
   };
 
   const resetLowes = () => {
-    setLowesItems([]); setLowesChecked(new Set());
-    setLowesCountdown(null);
+    setLowesItems([]); setLowesChecked(new Set()); setLowesCountdown(null);
     if (lowesTimerRef.current) { clearInterval(lowesTimerRef.current); lowesTimerRef.current = null; }
     lowesResetAtRef.current = null;
     setDoc(doc(db, "app", "lowes"), { items: [], checked: [], resetAt: null });
   };
 
-  // --- Computed shopping items ---
   const allShoppingItems = useMemo(() => {
     const items = [];
     recipes.filter(r=>checkedIds.has(r.id)).forEach(r => {
@@ -480,14 +476,11 @@ export default function App() {
   const checked=allShoppingItems.filter(item=>checkedItems.has(item.key)).length;
   const pct=total>0?Math.round((checked/total)*100):0;
   const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.length>0);
-  const barColor=pct===100?"#22c55e":pct>=66?"#84cc16":"#ffe066";
 
-  // --- Auto-reset timer ---
   const resetAtRef = useRef(null);
   useEffect(() => {
     if (total>0&&checked===total) {
       if (timerRef.current) return;
-      // Save resetAt to Firebase so it persists across refreshes
       const end = resetAtRef.current || Date.now()+60*60*1000;
       resetAtRef.current = end;
       saveShoppingState({ resetAt: end });
@@ -504,14 +497,12 @@ export default function App() {
     }
   }, [checked, total]);
 
-  // --- Handlers ---
   const resetShopping = () => {
     const empty = { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null };
     setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
     setEditingKey(null);
     if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
-    resetAtRef.current = null;
-    setCountdown(null);
+    resetAtRef.current = null; setCountdown(null);
     saveShoppingState(empty);
   };
 
@@ -548,18 +539,8 @@ export default function App() {
   };
 
   const removeItem = (key) => {
-    setRemovedKeys(prev => {
-      const n = new Set(prev);
-      n.add(key);
-      saveShoppingState({ removedKeys: [...n] });
-      return n;
-    });
-    setCheckedItems(prev => {
-      const n = new Set(prev);
-      n.delete(key);
-      saveShoppingState({ checkedItems: [...n] });
-      return n;
-    });
+    setRemovedKeys(prev => { const n = new Set(prev); n.add(key); saveShoppingState({ removedKeys: [...n] }); return n; });
+    setCheckedItems(prev => { const n = new Set(prev); n.delete(key); saveShoppingState({ checkedItems: [...n] }); return n; });
   };
 
   const startEdit = (key, text, e) => { e.stopPropagation(); setEditingKey(key); setEditingText(text); };
@@ -579,23 +560,43 @@ export default function App() {
     const updated = [...manualItems, item];
     setManualItems(updated);
     saveShoppingState({ manualItems: updated });
-    setManualInput("");
-    setManualQty("");
+    setManualInput(""); setManualQty("");
   };
+
+  // --- Shared recipe save helper ---
+  const saveRecipesToFirestore = async (nr) => {
+    const batch = writeBatch(db);
+    nr.forEach((r, i) => {
+      const id = `recipe_${Date.now()}_${i}`;
+      batch.set(doc(db, "recipes", id), {
+        title: r.title, category: r.category, baseServings: r.baseServings,
+        servings: r.servings, ingredients: r.ingredients, instructions: r.instructions,
+        favorite: false, notes: "", storage: ""
+      });
+    });
+    await batch.commit();
+  };
+
+  const RECIPE_PROMPT = `Extract this recipe and format it exactly like this:
+
+Recipe Title
+Category: Mains
+Servings: 4
+Ingredients:
+- ingredient 1
+- ingredient 2
+Instructions:
+1. Step one
+2. Step two
+
+Use one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Sides, Desserts, Breads & Breakfast, Drinks, Other.
+Return ONLY the formatted recipe, nothing else.`;
 
   const handleImport = async () => {
     if (!importText.trim()) return;
     const nr = parseRecipes(importText);
     if (nr.length) {
-      const batch = writeBatch(db);
-      nr.forEach((r, i) => {
-        const id = `recipe_${Date.now()}_${i}`;
-        batch.set(doc(db, "recipes", id), {
-          title: r.title, category: r.category, baseServings: r.baseServings,
-          servings: r.servings, ingredients: r.ingredients, instructions: r.instructions, favorite: false, notes: "", storage: ""
-        });
-      });
-      await batch.commit();
+      await saveRecipesToFirestore(nr);
       setImportText(""); setShowImport(false);
     }
   };
@@ -629,20 +630,7 @@ export default function App() {
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-              { type: "text", text: `Extract this recipe and format it exactly like this:
-
-Recipe Title
-Category: Mains
-Servings: 4
-Ingredients:
-- ingredient 1
-- ingredient 2
-Instructions:
-1. Step one
-2. Step two
-
-Use one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Sides, Desserts, Breads & Breakfast, Drinks, Other.
-Return ONLY the formatted recipe, nothing else.` }
+              { type: "text", text: RECIPE_PROMPT }
             ]
           }]
         })
@@ -653,21 +641,54 @@ Return ONLY the formatted recipe, nothing else.` }
       if (!recipeText) throw new Error("No recipe text returned");
       const nr = parseRecipes(recipeText);
       if (!nr.length) throw new Error("Could not parse recipe from image");
-      const batch = writeBatch(db);
-      nr.forEach((r, i) => {
-        const id = `recipe_${Date.now()}_${i}`;
-        batch.set(doc(db, "recipes", id), {
-          title: r.title, category: r.category, baseServings: r.baseServings,
-          servings: r.servings, ingredients: r.ingredients, instructions: r.instructions, favorite: false, notes: "", storage: ""
-        });
-      });
-      await batch.commit();
+      await saveRecipesToFirestore(nr);
       setShowPhotoImport(false);
       setPhotoImporting(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
     } catch(err) {
       setPhotoError(err.message || "Something went wrong. Please try again.");
       setPhotoImporting(false);
+    }
+  };
+
+  // --- URL Import ---
+  const handleUrlImport = async () => {
+    if (!urlImportValue.trim()) return;
+    setUrlImporting(true);
+    setUrlImportError(null);
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-opus-4-5",
+          max_tokens: 2000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{
+            role: "user",
+            content: `Fetch the recipe from this URL and extract it: ${urlImportValue.trim()}\n\n${RECIPE_PROMPT}`
+          }]
+        })
+      });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      const textBlock = data.content?.find(b => b.type === "text");
+      const recipeText = textBlock?.text;
+      if (!recipeText) throw new Error("No recipe text returned");
+      const nr = parseRecipes(recipeText);
+      if (!nr.length) throw new Error("Could not parse a recipe from that URL. Try the text import instead.");
+      await saveRecipesToFirestore(nr);
+      setShowUrlImport(false);
+      setUrlImportValue("");
+      setUrlImporting(false);
+    } catch(err) {
+      setUrlImportError(err.message || "Something went wrong. Please try again.");
+      setUrlImporting(false);
     }
   };
 
@@ -719,13 +740,10 @@ Return ONLY the formatted recipe, nothing else.` }
   if (view==="shopping") {
     const TARGET_RED = "#cc0000";
     const LOWES_BLUE = "#004990";
-
-    // Store tab colors
     const storeColor = storeTab === "mb" ? MB_RED : storeTab === "target" ? TARGET_RED : LOWES_BLUE;
     const storeDark = storeTab === "mb" ? MB_DARK : storeTab === "target" ? "#990000" : "#003370";
     const storeName = storeTab === "mb" ? GROCERY_STORE_NAME : storeTab === "target" ? "Target" : "Lowe's / Home Depot";
 
-    // Target grouped
     const targetGrouped = {};
     TARGET_CATEGORIES.forEach(c => targetGrouped[c.key] = []);
     targetItems.forEach(item => { (targetGrouped[item.category] || targetGrouped["other"]).push(item); });
@@ -734,7 +752,6 @@ Return ONLY the formatted recipe, nothing else.` }
     const targetCheckedCount = targetItems.filter(i => targetChecked.has(i.key)).length;
     const targetPct = targetTotal > 0 ? Math.round((targetCheckedCount / targetTotal) * 100) : 0;
 
-    // Lowes grouped
     const lowesGrouped = {};
     LOWES_CATEGORIES.forEach(c => lowesGrouped[c.key] = []);
     lowesItems.forEach(item => { (lowesGrouped[item.category] || lowesGrouped["other"]).push(item); });
@@ -761,7 +778,6 @@ Return ONLY the formatted recipe, nothing else.` }
 
     return (
       <div style={{fontFamily:font,background:"#f5f5f0",minHeight:"100vh",color:"#222",paddingBottom:40}}>
-        {/* Header */}
         <div style={{background:storeColor,color:"white",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
             <div style={{fontSize:12,opacity:0.85}}>{storeName}</div>
@@ -770,14 +786,10 @@ Return ONLY the formatted recipe, nothing else.` }
           <button onClick={storeTab==="mb"?resetShopping:storeTab==="target"?resetTarget:resetLowes}
             style={{background:storeDark,color:"white",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font}}>Reset</button>
         </div>
-
-        {/* Progress bar */}
         <div style={{background:storeDark,height:14,position:"relative"}}>
           <div style={{background:currentBarColor,height:14,width:currentPct+"%",transition:"width 0.4s ease"}}/>
           {currentPct>8&&<span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",fontSize:10,fontWeight:700,color:currentPct>45?"#1a1a1a":"#fff8f0"}}>{currentPct}%</span>}
         </div>
-
-        {/* Count bar */}
         <div style={{background:"#fff8f0",padding:"8px 20px",fontSize:13,color:"#555",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e0e0d8"}}>
           <span><strong style={{color:storeColor}}>{currentChecked}</strong> of <strong style={{color:storeColor}}>{currentTotal}</strong> items &nbsp;
             <span style={{color:"#aaa",fontSize:12}}>{currentTotal-currentChecked>0?`· ${currentTotal-currentChecked} remaining`:"· all done!"}</span>
@@ -788,7 +800,6 @@ Return ONLY the formatted recipe, nothing else.` }
           <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${storeColor}`,color:storeColor,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Back</button>
         </div>
 
-        {/* Market Basket list */}
         {storeTab==="mb"&&(
           <div>
             <div style={{padding:"10px 16px 0"}}>
@@ -852,12 +863,11 @@ Return ONLY the formatted recipe, nothing else.` }
           </div>
         )}
 
-        {/* Target list */}
         {storeTab==="target"&&(
           <div>
             <div style={{padding:"10px 16px 0"}}>
               <div style={{display:"flex",gap:8}}>
-                <input type="number" min={1} max={99} value={targetQty} onChange={e=>setTargetQty(e.target.value)} onBlur={e=>setTargetQty(v=>parseInt(v)||"")} placeholder="1" style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
+                <input type="number" min={1} max={99} value={targetQty} onChange={e=>setTargetQty(e.target.value)} placeholder="1" style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
                 <input value={targetInput} onChange={e=>setTargetInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTargetItem()} placeholder="Add item to Target list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
                 <button onClick={addTargetItem} style={{background:TARGET_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
@@ -877,12 +887,11 @@ Return ONLY the formatted recipe, nothing else.` }
           </div>
         )}
 
-        {/* Lowes list */}
         {storeTab==="lowes"&&(
           <div>
             <div style={{padding:"10px 16px 0"}}>
               <div style={{display:"flex",gap:8}}>
-                <input type="number" min={1} max={99} value={lowesQty} onChange={e=>setLowesQty(e.target.value)} onBlur={e=>setLowesQty(v=>parseInt(v)||"")} placeholder="1" style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
+                <input type="number" min={1} max={99} value={lowesQty} onChange={e=>setLowesQty(e.target.value)} placeholder="1" style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
                 <input value={lowesInput} onChange={e=>setLowesInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLowesItem()} placeholder="Add item to Lowe's list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
                 <button onClick={addLowesItem} style={{background:LOWES_BLUE,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
@@ -905,7 +914,7 @@ Return ONLY the formatted recipe, nothing else.` }
     );
   }
 
-    // --- Recipe detail view ---
+  // --- Recipe detail view ---
   if (selected) {
     const ratio=selected.servings/selected.baseServings;
     const isEditing=editingRecipeId===selected.id;
@@ -978,12 +987,12 @@ Return ONLY the formatted recipe, nothing else.` }
                   <p style={{fontSize:12,color:"#8a6030",fontStyle:"italic",marginBottom:16}}>{selected.category}</p>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <button onClick={toggleWakeLock} title={wakeActive?"Screen stay-on: ON":"Screen stay-on: OFF"}
-                  style={{background:wakeActive?"#22c55e":"transparent",border:`1.5px solid ${wakeActive?"#22c55e":kraft}`,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:600,color:wakeActive?"white":tabBg,cursor:"pointer",fontFamily:font}}>
-                  {wakeActive?"☀️ On":"☀️ Off"}
-                </button>
-                <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18}} onClick={()=>toggleFav(selected.id)}>{selected.favorite?"★":"☆"}</button>
-              </div>
+                  <button onClick={toggleWakeLock} title={wakeActive?"Screen stay-on: ON":"Screen stay-on: OFF"}
+                    style={{background:wakeActive?"#22c55e":"transparent",border:`1.5px solid ${wakeActive?"#22c55e":kraft}`,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:600,color:wakeActive?"white":tabBg,cursor:"pointer",fontFamily:font}}>
+                    {wakeActive?"☀️ On":"☀️ Off"}
+                  </button>
+                  <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18}} onClick={()=>toggleFav(selected.id)}>{selected.favorite?"★":"☆"}</button>
+                </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:12,background:ringBg,borderRadius:8,padding:"10px 14px",marginBottom:20}}>
                 <span style={{fontSize:13,fontWeight:500,minWidth:60}}>Servings</span>
@@ -1030,6 +1039,8 @@ Return ONLY the formatted recipe, nothing else.` }
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
         <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>{APP_NAME}</p>
         <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+
+          {/* Store buttons */}
           <div style={{position:"relative"}}>
             <button onClick={()=>{setStoreTab("mb");setView("shopping");}}
               style={{padding:"6px 14px",borderRadius:8,border:"none",background:MB_RED,color:"white",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font,letterSpacing:0.3,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
@@ -1051,20 +1062,69 @@ Return ONLY the formatted recipe, nothing else.` }
             </button>
             {lowesItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"white",color:"#004990",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,border:"1.5px solid #004990"}}>{lowesItems.length>99?"99+":lowesItems.length}</span>}
           </div>
-          <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import Recipe</button>
-          <button onClick={()=>photoInputRef.current?.click()} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>📷 Photo</button>
+
+          {/* ── Import dropdown ── */}
+          <div style={{position:"relative"}} ref={importDropdownRef}>
+            <button
+              onClick={()=>setShowImportDropdown(v=>!v)}
+              style={{
+                padding:"6px 12px",borderRadius:16,
+                border:`1.5px solid ${kraft}`,
+                background: showImportDropdown ? kraft : "transparent",
+                color: showImportDropdown ? darkBrown : kraft,
+                fontSize:12,cursor:"pointer",fontFamily:font,
+                display:"flex",alignItems:"center",gap:5,
+                transition:"background 0.15s, color 0.15s",
+              }}>
+              ＋ Import <span style={{fontSize:9,opacity:0.75,marginTop:1}}>{showImportDropdown?"▲":"▼"}</span>
+            </button>
+            {showImportDropdown&&(
+              <div style={{
+                position:"absolute",top:"calc(100% + 6px)",left:0,
+                background:cream,border:`1.5px solid ${kraft}`,
+                borderRadius:10,boxShadow:"0 6px 20px rgba(61,43,26,0.18)",
+                zIndex:200,minWidth:155,overflow:"hidden",
+              }}>
+                {[
+                  { icon:"📝", label:"Paste Text",  action:()=>{ setShowImport(true); setShowUrlImport(false); } },
+                  { icon:"📷", label:"Photo",        action:()=>{ photoInputRef.current?.click(); } },
+                  { icon:"🔗", label:"URL / Link",   action:()=>{ setShowUrlImport(true); setShowImport(false); } },
+                ].map((opt, idx, arr) => (
+                  <button
+                    key={opt.label}
+                    onClick={()=>{ setShowImportDropdown(false); opt.action(); }}
+                    style={{
+                      width:"100%",padding:"11px 15px",background:"transparent",border:"none",
+                      borderBottom: idx < arr.length-1 ? `1px solid ${ringBg}` : "none",
+                      textAlign:"left",fontSize:13,color:darkBrown,cursor:"pointer",
+                      fontFamily:font,display:"flex",alignItems:"center",gap:9,
+                    }}
+                    onMouseEnter={e=>e.currentTarget.style.background=ringBg}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                  >
+                    <span style={{fontSize:15}}>{opt.icon}</span> {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
         </div>
+
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none"}}>
           {CATEGORIES.map(cat=>{const active=activeTab===cat;return <button key={cat} onClick={()=>setActiveTab(cat)} style={{padding:"7px 12px",fontSize:12,border:"none",cursor:"pointer",whiteSpace:"nowrap",borderRadius:"6px 6px 0 0",fontFamily:font,fontWeight:active?500:400,background:active?cream:tabBg,color:active?darkBrown:"#f5e6c8",marginRight:2}}>{cat}</button>;})}
         </div>
       </div>
+
       <div style={{padding:"10px 12px 0",display:"flex",gap:8,alignItems:"center"}}>
         <input placeholder="Search recipes or ingredients..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,padding:"8px 12px",borderRadius:20,border:`1.5px solid ${kraft}`,background:"#2a1c0e",color:cream,fontSize:14,outline:"none",fontFamily:font,boxSizing:"border-box"}}/>
         <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"8px 12px",borderRadius:20,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
           {sortAZ?"A→Z":"Z→A"}
         </button>
       </div>
+
+      {/* ── Text import panel ── */}
       {showImport&&(
         <div style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,margin:"10px 12px",padding:14}}>
           <p style={{fontSize:13,color:darkBrown,marginBottom:6,fontStyle:"italic"}}>Paste recipe text below — it will be saved to your cookbook.</p>
@@ -1075,13 +1135,44 @@ Return ONLY the formatted recipe, nothing else.` }
           </div>
         </div>
       )}
+
+      {/* ── URL import panel ── */}
+      {showUrlImport&&(
+        <div style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,margin:"10px 12px",padding:14}}>
+          {urlImporting?(
+            <div style={{textAlign:"center",padding:"10px 0"}}>
+              <div style={{fontSize:26,marginBottom:8}}>🔗</div>
+              <p style={{fontSize:14,color:tabBg,fontWeight:500}}>Fetching recipe from URL…</p>
+              <p style={{fontSize:12,color:"#aaa"}}>This usually takes 5–15 seconds</p>
+            </div>
+          ):(
+            <>
+              <p style={{fontSize:13,color:darkBrown,marginBottom:8,fontStyle:"italic"}}>Paste a recipe URL and we'll extract it for you.</p>
+              {urlImportError&&<p style={{fontSize:12,color:"#c0392b",marginBottom:8}}>⚠️ {urlImportError}</p>}
+              <input
+                value={urlImportValue}
+                onChange={e=>setUrlImportValue(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&handleUrlImport()}
+                placeholder="https://www.example.com/recipes/chicken-soup"
+                style={{width:"100%",padding:"9px 12px",border:`1px solid ${kraft}`,borderRadius:6,fontSize:13,fontFamily:font,background:cream,color:darkBrown,boxSizing:"border-box",outline:"none"}}
+              />
+              <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
+                <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 14px",background:"transparent",color:darkBrown,border:`1px solid ${kraft}`,borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
+                <button onClick={handleUrlImport} style={{padding:"8px 18px",background:darkBrown,color:cream,border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Import Recipe</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Photo import status panel ── */}
       {showPhotoImport&&(
         <div style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,margin:"10px 12px",padding:14,textAlign:"center"}}>
           {photoImporting?(
             <>
               <div style={{fontSize:28,marginBottom:8}}>📷</div>
               <p style={{fontSize:14,color:tabBg,fontWeight:500}}>Reading recipe from photo…</p>
-              <p style={{fontSize:12,color:"#aaa"}}>This usually takes 5-10 seconds</p>
+              <p style={{fontSize:12,color:"#aaa"}}>This usually takes 5–10 seconds</p>
             </>
           ):photoError?(
             <>
@@ -1092,6 +1183,7 @@ Return ONLY the formatted recipe, nothing else.` }
           ):null}
         </div>
       )}
+
       <div style={{padding:"12px 12px 0"}}>
         {filtered.length===0?(
           <p style={{textAlign:"center",padding:"40px 20px",color:"#8a6030",fontStyle:"italic"}}>{search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}</p>
