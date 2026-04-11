@@ -101,10 +101,10 @@ export const classifyLowes = (text) => {
 
 export const KEYWORD_MAP = {
   entrance: ["sourdough","artisan bread","specialty bread","baguette"],
-  produce: ["lettuce","spinach","kale","cabbage","tomato","tomatoes","onion","onions","garlic","carrot","carrots","celery","potato","potatoes","sweet potato","pepper","peppers","cucumber","zucchini","mushroom","mushrooms","broccoli","cauliflower","avocado","avocados","lime","lemon","limes","lemons","apple","banana","berries","cilantro","parsley","basil","ginger","jalapeno","scallion","shallot","corn","green onion","green beans","arugula","squash","asparagus","roma","fresh herb","cherry tomato"],
+  produce: ["lettuce","spinach","kale","cabbage","tomato","tomatoes","onion","onions","garlic","carrot","carrots","celery","potato","potatoes","sweet potato","pepper","peppers","cucumber","zucchini","mushroom","mushrooms","broccoli","cauliflower","avocado","avocados","lime","lemon","limes","lemons","apple","banana","berries","kiwi","cilantro","parsley","basil","ginger","jalapeno","scallion","shallot","corn","green onion","green beans","arugula","squash","asparagus","roma","fresh herb","cherry tomato"],
   meat: ["chicken","beef","pork","lamb","turkey","bacon","sausage","ham","steak","roast","ground beef","ground turkey","chuck","brisket","sirloin","bratwurst","hot dog","pepperoni","salami"],
   deli: ["sliced turkey","sliced ham","sliced chicken","roast beef","bologna","deli meat","deli cheese","provolone","swiss cheese","american cheese","muenster","pepper jack","colby","salt pork","prosciutto","pancetta"],
-  frozen1: ["frozen vegetable","frozen meal","frozen meat","frozen chicken","frozen fish","frozen shrimp","frozen corn","frozen peas","frozen spinach","frozen broccoli","frozen dinner","frozen dumpling","dumpling"],
+  frozen1: ["frozen vegetable","frozen meal","frozen meat","frozen chicken","frozen fish","frozen shrimp","frozen corn","frozen peas","frozen spinach","frozen broccoli","frozen dinner","frozen dumpling","dumpling","veggie burger","vegetable burger","garden burger","black bean burger"],
   frozen2: ["frozen pizza","frozen appetizer","frozen app","frozen snack","pizza rolls","hot pocket","egg rolls"],
   beverages2: ["wine","beer","champagne","cider","hard seltzer","ale","lager","ipa","prosecco","marsala","guinness","stout"],
   bread: ["bread","tortilla","tortillas","roll","bun","pita","bagel","english muffin","crackers","peanut butter","almond butter","nut butter","graham crackers","rice cakes","ritz"],
@@ -116,14 +116,14 @@ export const KEYWORD_MAP = {
   health2: ["kleenex","tissue","dove","softsoap","bar soap","body wash","shampoo","conditioner","lotion","deodorant","toothpaste","toothbrush","floss","razor","cotton"],
   health1: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","nyquil","bandage","first aid","melatonin","protein powder","probiotic","mouthwash","listerine","oral b"],
   kitchen: ["cooking spray","food storage"],
-  spices: ["spices","cumin","paprika","oregano","cinnamon","turmeric","garlic powder","onion powder","chili powder","cayenne","red pepper flakes","italian seasoning","bay leaf","vanilla","baking soda","baking powder","flour","sugar","brown sugar","powdered sugar","cornstarch","yeast","cocoa","coffee","tea","thyme","rosemary","sage","marjoram","nutmeg","coriander","smoked paprika","kosher salt","sea salt","black pepper","white pepper"],
+  spices: ["spices","cumin","paprika","oregano","cinnamon","turmeric","garlic powder","onion powder","chili powder","cayenne","red pepper flakes","italian seasoning","bay leaf","vanilla","baking soda","baking powder","flour","sugar","brown sugar","powdered sugar","cornstarch","yeast","cocoa","coffee","tea","thyme","rosemary","sage","marjoram","nutmeg","coriander","smoked paprika","kosher salt","sea salt","black pepper","white pepper","slivered almonds","sliced almonds"],
   canned: ["canned","can of","black beans","kidney beans","chickpeas","lentils","canned tomato","tomato sauce","canned corn","canned beans","canned vegetable","diced tomatoes","crushed tomatoes","coconut milk","evaporated milk","condensed milk","miso","white beans","cannellini beans"],
   pasta: ["pasta","spaghetti","penne","fettuccine","lasagna","macaroni","rice","quinoa","couscous","orzo","noodles","ramen","pasta sauce","marinara","alfredo","pesto","salsa","egg noodle","linguine","tortellini","ditalini","san marzano"],
   cereal: ["cereal","oatmeal","oats","granola","grits","cream of wheat","muesli","granola bar","protein bar"],
   condiments: ["ketchup","mustard","mayonnaise","mayo","soy sauce","worcestershire","hot sauce","sriracha","oyster sauce","fish sauce","hoisin","teriyaki","barbecue","bbq","ranch","honey","maple syrup","jam","jelly","relish","pickle","olive","capers","vinegar","balsamic","apple cider vinegar","tahini","hummus","salad dressing","marinade","lawry","tomato paste","dijon"],
   eggs: ["egg","eggs","bacon","soup","fresh pasta","quiche","chicken broth","beef broth","vegetable broth","broth","stock","bone broth","clam juice"],
   seafood: ["fish","salmon","tuna","shrimp","tilapia","cod","crab","lobster","scallop","anchovy","haddock","clam","clams","mussel","oyster","swordfish","halibut","mahi","sea bass","flounder"],
-  dairy: ["milk","cream","sour cream","cream cheese","parmesan","mozzarella","cheddar","ricotta","half and half","heavy cream","buttermilk","cottage cheese","whipping cream","brie","gouda","feta","string cheese","yogurt","cheese","gruyere","cotija","pecorino","butter","pie crust","pie shell"],
+  dairy: ["milk","cream","sour cream","cream cheese","parmesan","mozzarella","cheddar","ricotta","half and half","heavy cream","buttermilk","cottage cheese","whipping cream","brie","gouda","feta","string cheese","yogurt","cheese","gruyere","cotija","pecorino","butter","margarine","pie crust","pie shell"],
 };
 
 export const classifyIngredient = (ing) => {
@@ -133,10 +133,14 @@ export const classifyIngredient = (ing) => {
   if (/\beggs?\b|\bbacon\b/.test(lower)) return "eggs";
   if (/tomato paste|tomato sauce/.test(lower)) return "condiments";
   if (/frozen|dumpling/.test(lower)) return "frozen1";
+  if (/veggie burger|vegetable burger|garden burger|black bean burger/.test(lower)) return "frozen1";
   if (/pie crust|pie shell/.test(lower)) return "dairy";
-  if (/peanut butter|almond butter|nut butter/.test(lower)) return "bread";  // ← ADD before butter check
+  if (/slivered almond|sliced almond/.test(lower)) return "spices";
+  if (/peanut butter|almond butter|nut butter/.test(lower)) return "bread";
+  if (/margarine/.test(lower)) return "dairy";
   if (/\bbutter\b/.test(lower)) return "dairy";
-  if (/\bapple\b/.test(lower) && !/apple cider vinegar/.test(lower)) return "produce";  // ← ADD before condiments
+  if (/\bapple\b/.test(lower) && !/apple cider vinegar/.test(lower)) return "produce";
+  if (/\bkiwi/.test(lower)) return "produce";
   if (/dijon/.test(lower)) return "condiments";
   if (/oil/.test(lower)) return "condiments";
   if (/wine/.test(lower)) return "beverages2";
@@ -271,7 +275,7 @@ export const PRODUCE_ORDER = [
   "onion","onions","garlic","shallot","scallion","green onion","potato","potatoes","sweet potato","ginger",
   "broccoli","cauliflower","cabbage","kale","arugula","lettuce","celery","carrot","carrots","corn","green beans","squash","zucchini","cucumber","pepper","peppers","jalapeno","poblano","tomato","tomatoes","cherry tomato","roma","fresh herb","cilantro","parsley","basil","thyme","rosemary",
   "asparagus",
-  "apple",
+  "apple","kiwi",
   "banana",
   "berries","lime","lemon","limes","lemons","orange",
   "mushroom","mushrooms",
