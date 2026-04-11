@@ -140,7 +140,8 @@ export const classifyIngredient = (ing) => {
   if (/margarine/.test(lower)) return "dairy";
   if (/\bbutter\b/.test(lower)) return "dairy";
   if (/\bapple\b/.test(lower) && !/apple cider vinegar/.test(lower)) return "produce";
-  if (/\bkiwi/.test(lower)) return "produce";
+  if (/\bkiwi\b/.test(lower)) return "produce";
+  if (/popcorn/.test(lower)) return "snacks";
   if (/dijon/.test(lower)) return "condiments";
   if (/oil/.test(lower)) return "condiments";
   if (/wine/.test(lower)) return "beverages2";
